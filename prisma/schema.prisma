@@ -1,0 +1,111 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Location {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  address      String?
+  createdAt    DateTime      @default(now())
+  hunts        Hunt[]
+  participants Participant[]
+}
+
+model Hunt {
+  id                     String                 @id @default(cuid())
+  title                  String
+  description            String?
+  locationId             String
+  location               Location               @relation(fields: [locationId], references: [id])
+  isActive               Boolean                @default(false)
+  startDate              DateTime?
+  endDate                DateTime?
+  voucherPrefix          String
+  voucherDiscountPercent Int                    @default(10)
+  voucherExpiryDate      DateTime?
+  registrationHeadline   String
+  registrationSubtext    String?
+  completionMessage      String
+  // Theme
+  themePreset            String?                @default("EASTER")
+  themePrimaryColor      String?
+  themeAccentColor       String?
+  createdAt              DateTime               @default(now())
+  clues                  Clue[]
+  participants           Participant[]
+  registrationQuestions  RegistrationQuestion[]
+}
+
+model Clue {
+  id              String        @id @default(cuid())
+  huntId          String
+  hunt            Hunt          @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  order           Int
+  poem            String
+  taskDescription String
+  locationHint    String
+  answerType      String
+  correctAnswer   String
+  hint            String?
+  createdAt       DateTime      @default(now())
+  attempts        ClueAttempt[]
+}
+
+model Participant {
+  id                  String               @id @default(cuid())
+  huntId              String
+  hunt                Hunt                 @relation(fields: [huntId], references: [id])
+  locationId          String
+  location            Location             @relation(fields: [locationId], references: [id])
+  fullName            String
+  email               String
+  phone               String
+  shoppingIntent      String?
+  currentClueIndex    Int                  @default(0)
+  startedAt           DateTime             @default(now())
+  completedAt         DateTime?
+  voucherCode         String?              @unique
+  createdAt           DateTime             @default(now())
+  attempts            ClueAttempt[]
+  registrationAnswers RegistrationAnswer[]
+}
+
+model RegistrationQuestion {
+  id        String               @id @default(cuid())
+  huntId    String
+  hunt      Hunt                 @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  label     String
+  type      String               // "TEXT" | "CHECKBOX"
+  options   String?              // JSON array string e.g. '["Option A","Option B"]' — CHECKBOX only
+  required  Boolean              @default(false)
+  order     Int
+  createdAt DateTime             @default(now())
+  answers   RegistrationAnswer[]
+}
+
+model RegistrationAnswer {
+  id            String               @id @default(cuid())
+  participantId String
+  participant   Participant          @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      RegistrationQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value         String               // TEXT: plain string; CHECKBOX: JSON array e.g. '["Option A"]'
+  createdAt     DateTime             @default(now())
+}
+
+model ClueAttempt {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id])
+  clueId        String
+  clue          Clue        @relation(fields: [clueId], references: [id])
+  answer        String
+  isCorrect     Boolean
+  attemptedAt   DateTime    @default(now())
+}
