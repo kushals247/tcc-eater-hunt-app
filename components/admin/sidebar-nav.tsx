@@ -90,13 +90,13 @@ export function SidebarNav({ role }: { role: string }) {
 
       {/* Logout */}
       <div className="px-3 py-4 border-t border-slate-700/60">
-        <Link
-          href="/api/admin/auth?logout=1"
+        <button
+          onClick={() => { window.location.href = '/api/admin/auth?logout=1' }}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-950/30 transition-colors w-full"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           Sign out
-        </Link>
+        </button>
       </div>
     </aside>
   )
