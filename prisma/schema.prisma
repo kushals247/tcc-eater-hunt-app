@@ -76,6 +76,8 @@ model Participant {
   createdAt           DateTime             @default(now())
   attempts            ClueAttempt[]
   registrationAnswers RegistrationAnswer[]
+
+  @@unique([phone, huntId])
 }
 
 model AdminUser {

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { registerParticipant } from '@/actions/participant'
+import { normalizePhone, isValidInternationalPhone } from '@/lib/phone'
 
 type Question = {
   id: string
@@ -24,6 +25,8 @@ export default function RegistrationForm({ huntId, locationId, locationSlug, que
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+  const [resuming, setResuming] = useState(false)
   const [form, setForm] = useState({ fullName: '', email: '', phone: '' })
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({})
   const [checkboxValues, setCheckboxValues] = useState<Record<string, string[]>>({})
@@ -42,11 +45,29 @@ export default function RegistrationForm({ huntId, locationId, locationSlug, que
     })
   }
 
+  function handlePhoneBlur() {
+    const normalized = normalizePhone(form.phone)
+    if (normalized !== form.phone) {
+      setForm((f) => ({ ...f, phone: normalized }))
+    }
+    if (form.phone.trim() && !isValidInternationalPhone(normalized)) {
+      setPhoneError('Include the international dialling code, e.g. +254 712 345 678')
+    } else {
+      setPhoneError('')
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
     if (!form.fullName.trim() || !form.email.trim() || !form.phone.trim()) {
       setError('Please fill in all required fields.')
+      return
+    }
+
+    const normalizedPhone = normalizePhone(form.phone)
+    if (!isValidInternationalPhone(normalizedPhone)) {
+      setPhoneError('Include the international dialling code, e.g. +254 712 345 678')
       return
     }
 
@@ -90,6 +111,10 @@ export default function RegistrationForm({ huntId, locationId, locationSlug, que
       return
     }
 
+    if (result.alreadyRegistered) {
+      setResuming(true)
+    }
+
     router.push(`/hunt/${locationSlug}/${huntId}/play/${result.participantId}`)
   }
 
@@ -111,7 +136,24 @@ export default function RegistrationForm({ huntId, locationId, locationSlug, que
 
       <div>
         <label htmlFor="phone" className={labelClass}>Mobile Number *</label>
-        <input id="phone" type="tel" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} required autoComplete="tel" className={inputClass} placeholder="+254 7XX XXX XXX" aria-required="true" />
+        <input
+          id="phone"
+          type="tel"
+          value={form.phone}
+          onChange={(e) => { setForm((f) => ({ ...f, phone: e.target.value })); setPhoneError('') }}
+          onBlur={handlePhoneBlur}
+          required
+          autoComplete="tel"
+          className={`${inputClass} ${phoneError ? 'border-red-400 focus:ring-red-300' : ''}`}
+          placeholder="+254 712 345 678"
+          aria-required="true"
+          aria-describedby="phone-hint"
+        />
+        {phoneError ? (
+          <p id="phone-hint" className="mt-1.5 text-xs text-red-600">{phoneError}</p>
+        ) : (
+          <p id="phone-hint" className="mt-1.5 text-xs text-gray-400">Include country code — e.g. +254 712 345 678 or +44 7911 123456</p>
+        )}
       </div>
 
       {/* Dynamic custom questions */}
@@ -177,13 +219,19 @@ export default function RegistrationForm({ huntId, locationId, locationSlug, que
         </div>
       )}
 
+      {resuming && (
+        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200" role="status">
+          <p className="text-sm text-amber-700">You&apos;ve already registered with this number — resuming your hunt…</p>
+        </div>
+      )}
+
       <button
         type="submit"
         disabled={loading}
         className="w-full h-14 text-white rounded-xl text-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity hover:opacity-90 mt-2"
         style={{ backgroundColor: primaryColor }}
       >
-        {loading ? 'Starting...' : 'Start the Hunt! 🎯'}
+        {loading ? (resuming ? 'Resuming…' : 'Starting…') : 'Start the Hunt! 🎯'}
       </button>
     </form>
   )

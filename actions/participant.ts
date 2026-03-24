@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { validateAnswer } from '@/lib/answer-validator'
 import { generateVoucherCode } from '@/lib/voucher'
 import { sendVoucherEmail } from '@/lib/email'
+import { normalizePhone, isValidInternationalPhone } from '@/lib/phone'
 
 interface RegisterParticipantData {
   huntId: string
@@ -18,16 +19,35 @@ interface RegisterParticipantData {
 export async function registerParticipant(data: RegisterParticipantData): Promise<{
   success: boolean
   participantId?: string
+  alreadyRegistered?: boolean
   error?: string
 }> {
   try {
+    const phone = normalizePhone(data.phone)
+
+    if (!isValidInternationalPhone(phone)) {
+      return {
+        success: false,
+        error: 'Please enter your phone number with the international dialling code, e.g. +254 712 345 678',
+      }
+    }
+
+    // If this phone has already registered for this hunt, resume their session
+    const existing = await prisma.participant.findFirst({
+      where: { phone, huntId: data.huntId },
+    })
+
+    if (existing) {
+      return { success: true, participantId: existing.id, alreadyRegistered: true }
+    }
+
     const participant = await prisma.participant.create({
       data: {
         huntId: data.huntId,
         locationId: data.locationId,
         fullName: data.fullName,
         email: data.email,
-        phone: data.phone,
+        phone,
         shoppingIntent: data.shoppingIntent || null,
         currentClueIndex: 0,
       },
