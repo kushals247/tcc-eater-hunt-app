@@ -8,7 +8,7 @@ const dbUrl = (() => {
   if (rawUrl.startsWith('file:./') || rawUrl.startsWith('file:../')) {
     const relativePath = rawUrl.replace(/^file:/, '')
     const absolutePath = path.resolve(process.cwd(), relativePath)
-    return `file://${absolutePath}`
+    return `file:${absolutePath}`
   }
   return rawUrl
 })()
