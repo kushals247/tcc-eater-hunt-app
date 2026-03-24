@@ -253,7 +253,7 @@ export async function exportParticipantsCSV(filters: {
     })
 
     const headers = ['Name', 'Email', 'Phone', 'Location', 'Hunt', 'Started', 'Completed', 'Clue Progress', 'Voucher Code', 'Voucher Used']
-    const rows = participants.map((p) => {
+    const rows = participants.map((p: any) => {
       const totalClues = p.hunt.clues.length
       return [
         p.fullName, p.email, p.phone,
