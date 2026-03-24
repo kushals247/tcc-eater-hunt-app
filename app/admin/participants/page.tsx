@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getSession } from '@/lib/auth'
 import ParticipantsClient from './participants-client'
 
 export default async function ParticipantsPage({ searchParams }: { searchParams: Promise<{ locationId?: string; huntId?: string; status?: string; search?: string }> }) {
@@ -17,6 +18,9 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
       { voucherCode: { contains: params.search } },
     ]
   }
+
+  const session = await getSession()
+  const canEdit = session?.role === 'ADMIN'
 
   const [participants, locations, hunts] = await Promise.all([
     prisma.participant.findMany({
@@ -46,6 +50,7 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
       locations={locations}
       hunts={hunts}
       filters={params}
+      canEdit={canEdit}
     />
   )
 }

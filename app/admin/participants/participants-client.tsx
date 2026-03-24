@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { exportParticipantsCSV } from '@/actions/admin'
+import { exportParticipantsCSV, markVoucherUsed } from '@/actions/admin'
 import { formatDateTime } from '@/lib/utils'
 
 type Participant = {
@@ -14,6 +14,8 @@ type Participant = {
   startedAt: Date
   completedAt: Date | null
   voucherCode: string | null
+  voucherUsed: boolean
+  voucherUsedAt: Date | null
   location: { name: string }
   hunt: { title: string; clues: { id: string }[] }
   attempts: Array<{
@@ -35,15 +37,19 @@ export default function ParticipantsClient({
   locations,
   hunts,
   filters,
+  canEdit,
 }: {
   participants: Participant[]
   locations: { id: string; name: string }[]
   hunts: { id: string; title: string; locationId: string }[]
   filters: { locationId?: string; huntId?: string; status?: string; search?: string }
+  canEdit: boolean
 }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Participant | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [voucherLoadingId, setVoucherLoadingId] = useState<string | null>(null)
+  const [localParticipants, setLocalParticipants] = useState(participants)
 
   const filteredHunts = filters.locationId ? hunts.filter((h) => h.locationId === filters.locationId) : hunts
 
@@ -70,12 +76,23 @@ export default function ParticipantsClient({
     router.push(`/admin/participants?${params.toString()}`)
   }
 
+  async function handleToggleVoucher(p: Participant) {
+    setVoucherLoadingId(p.id)
+    const res = await markVoucherUsed(p.id, !p.voucherUsed)
+    setVoucherLoadingId(null)
+    if (res.success) {
+      const updated = { ...p, voucherUsed: !p.voucherUsed, voucherUsedAt: !p.voucherUsed ? new Date() : null }
+      setLocalParticipants((prev) => prev.map((x) => x.id === p.id ? updated : x))
+      if (selected?.id === p.id) setSelected(updated)
+    }
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Participants</h1>
-          <p className="text-gray-500 mt-1">{participants.length} results</p>
+          <p className="text-gray-500 mt-1">{localParticipants.length} results</p>
         </div>
         <button onClick={handleExport} disabled={exporting} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors">
           {exporting ? 'Exporting...' : '⬇ Export CSV'}
@@ -97,7 +114,7 @@ export default function ParticipantsClient({
           <option value="completed">Completed</option>
           <option value="in_progress">In Progress</option>
         </select>
-        <input name="search" type="text" defaultValue={filters.search || ''} placeholder="Search name, email, voucher..." className="h-9 px-3 rounded-md border border-gray-300 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-green-600" />
+        <input name="search" type="text" defaultValue={filters.search || ''} placeholder="Search name, email, voucher..." className="h-9 px-3 rounded-md border border-gray-300 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-slate-600" />
         <button type="submit" className="px-3 h-9 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200">Filter</button>
         <a href="/admin/participants" className="px-3 h-9 flex items-center text-gray-500 rounded-md text-sm hover:bg-gray-100">Clear</a>
       </form>
@@ -109,37 +126,54 @@ export default function ParticipantsClient({
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Name</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Email</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Phone</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Location</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Hunt</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Started</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Completed</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Progress</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Voucher</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Redeemed</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {participants.length === 0 ? (
-                <tr><td colSpan={10} className="px-6 py-8 text-center text-gray-400">No participants found.</td></tr>
+              {localParticipants.length === 0 ? (
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400">No participants found.</td></tr>
               ) : (
-                participants.map((p) => (
+                localParticipants.map((p) => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{p.fullName}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{p.email}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{p.phone}</td>
                     <td className="px-4 py-3 text-gray-600">{p.location.name}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{p.hunt.title}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">{formatDateTime(p.startedAt)}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">{p.completedAt ? formatDateTime(p.completedAt) : '—'}</td>
                     <td className="px-4 py-3">
                       <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">{p.currentClueIndex}/{p.hunt.clues.length}</span>
                     </td>
                     <td className="px-4 py-3">
-                      {p.voucherCode ? <span className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">{p.voucherCode}</span> : '—'}
+                      {p.voucherCode
+                        ? <span className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">{p.voucherCode}</span>
+                        : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => setSelected(p)} className="text-blue-600 hover:text-blue-700 text-xs font-medium">View Details</button>
+                      {p.voucherCode ? (
+                        p.voucherUsed
+                          ? <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ Redeemed</span>
+                          : <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Unused</span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setSelected(p)} className="text-blue-600 hover:text-blue-700 text-xs font-medium">Details</button>
+                        {canEdit && p.voucherCode && (
+                          <button
+                            onClick={() => handleToggleVoucher(p)}
+                            disabled={voucherLoadingId === p.id}
+                            className={`text-xs font-medium px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${
+                              p.voucherUsed ? 'text-slate-600 bg-slate-100 hover:bg-slate-200' : 'text-green-700 bg-green-100 hover:bg-green-200'
+                            }`}
+                          >
+                            {voucherLoadingId === p.id ? '…' : p.voucherUsed ? 'Undo' : 'Mark Used'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -163,7 +197,6 @@ export default function ParticipantsClient({
                 <h3 className="font-medium text-gray-900 text-lg">{selected.fullName}</h3>
                 <p className="text-sm text-gray-600">{selected.email}</p>
                 <p className="text-sm text-gray-600">{selected.phone}</p>
-                {selected.shoppingIntent && <p className="text-sm text-gray-500">Shopping: {selected.shoppingIntent}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-gray-500">Location:</span> <span className="font-medium">{selected.location.name}</span></div>
@@ -172,9 +205,29 @@ export default function ParticipantsClient({
                 <div><span className="text-gray-500">Completed:</span> <span className="font-medium">{selected.completedAt ? formatDateTime(selected.completedAt) : '—'}</span></div>
                 <div><span className="text-gray-500">Progress:</span> <span className="font-medium">{selected.currentClueIndex}/{selected.hunt.clues.length} clues</span></div>
                 {selected.voucherCode && (
-                  <div className="col-span-2"><span className="text-gray-500">Voucher:</span> <span className="font-mono font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded">{selected.voucherCode}</span></div>
+                  <div className="col-span-2 flex items-center gap-3 flex-wrap">
+                    <div><span className="text-gray-500">Voucher:</span> <span className="font-mono font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded ml-1">{selected.voucherCode}</span></div>
+                    <div className="flex items-center gap-2">
+                      {selected.voucherUsed
+                        ? <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ Redeemed {selected.voucherUsedAt ? `on ${new Date(selected.voucherUsedAt).toLocaleDateString('en-GB')}` : ''}</span>
+                        : <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Unused</span>
+                      }
+                      {canEdit && (
+                        <button
+                          onClick={() => handleToggleVoucher(selected)}
+                          disabled={voucherLoadingId === selected.id}
+                          className={`text-xs font-medium px-3 py-1 rounded-md transition-colors disabled:opacity-50 ${
+                            selected.voucherUsed ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-green-600 text-white hover:bg-green-700'
+                          }`}
+                        >
+                          {voucherLoadingId === selected.id ? '…' : selected.voucherUsed ? 'Mark Unused' : 'Mark as Used'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
+
               {selected.registrationAnswers && selected.registrationAnswers.length > 0 && (
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-3">Custom Responses</h3>

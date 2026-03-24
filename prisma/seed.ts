@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaLibSql } from '@prisma/adapter-libsql'
 import path from 'path'
+import bcrypt from 'bcryptjs'
 
 const rawUrl = process.env.DATABASE_URL || 'file:./dev.db'
 const dbUrl = (() => {
@@ -18,8 +19,24 @@ const prisma = new PrismaClient({ adapter })
 async function main() {
   console.log('🌱 Seeding database...\n')
 
-  const existing = await prisma.location.findUnique({ where: { slug: 'demo' } })
+  // Default admin user
+  const existing = await prisma.adminUser.findUnique({ where: { username: 'admin' } })
   if (!existing) {
+    await prisma.adminUser.create({
+      data: {
+        username: 'admin',
+        passwordHash: await bcrypt.hash('admin123', 10),
+        role: 'ADMIN',
+      },
+    })
+    console.log('✅ Default admin user created (admin / admin123)')
+  } else {
+    console.log('✅ Admin user already exists')
+  }
+
+  // Demo location
+  const existingLocation = await prisma.location.findUnique({ where: { slug: 'demo' } })
+  if (!existingLocation) {
     await prisma.location.create({
       data: {
         name: 'Demo Store',
@@ -32,16 +49,14 @@ async function main() {
     console.log('✅ Demo location already exists')
   }
 
-  console.log('✅ Database ready\n')
+  console.log('\n✅ Database ready\n')
   console.log('─────────────────────────────────────')
   console.log('Next steps:')
   console.log('1. Visit http://localhost:3000/admin')
-  console.log('2. Log in with your ADMIN_PASSWORD')
-  console.log('3. Add your store locations under Locations')
-  console.log('4. Create a Hunt for each location')
-  console.log('5. Add Clues to each Hunt in the Clue Builder')
-  console.log('6. Generate QR codes under each Hunt → QR Code')
-  console.log('7. Print and place posters at store entrances')
+  console.log('2. Log in with: admin / admin123')
+  console.log('3. Change the admin password in Users → Edit')
+  console.log('4. Add your store locations under Locations')
+  console.log('5. Create a Hunt for each location')
   console.log('─────────────────────────────────────')
 }
 

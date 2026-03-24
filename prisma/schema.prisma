@@ -71,9 +71,22 @@ model Participant {
   startedAt           DateTime             @default(now())
   completedAt         DateTime?
   voucherCode         String?              @unique
+  voucherUsed         Boolean              @default(false)
+  voucherUsedAt       DateTime?
   createdAt           DateTime             @default(now())
   attempts            ClueAttempt[]
   registrationAnswers RegistrationAnswer[]
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String?
+  passwordHash String
+  role         String   @default("VIEWER")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model RegistrationQuestion {

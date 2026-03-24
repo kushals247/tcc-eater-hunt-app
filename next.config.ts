@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       allowedOrigins: ['localhost:3000'],
     },
   },
+  serverExternalPackages: ['jspdf', 'html2canvas'],
 }
 
 export default nextConfig

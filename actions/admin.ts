@@ -1,26 +1,25 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
+import bcrypt from 'bcryptjs'
 
-async function requireAuth() {
-  const isAuth = await getSession()
-  if (!isAuth) throw new Error('Unauthorized')
-}
+// ─── Locations ───────────────────────────────────────────────────────────────
 
-// Locations
 export async function createLocation(data: {
   name: string
   slug: string
   address?: string
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const location = await prisma.location.create({ data })
+    revalidatePath('/admin/locations')
     return { success: true, id: location.id }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('createLocation error:', error)
     return { success: false, error: 'Failed to create location' }
@@ -32,17 +31,20 @@ export async function updateLocation(
   data: { name: string; slug: string; address?: string }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     await prisma.location.update({ where: { id }, data })
+    revalidatePath('/admin/locations')
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('updateLocation error:', error)
     return { success: false, error: 'Failed to update location' }
   }
 }
+
+// ─── Hunts ────────────────────────────────────────────────────────────────────
 
 type HuntPayload = {
   title: string
@@ -62,15 +64,15 @@ type HuntPayload = {
   themeAccentColor?: string | null
 }
 
-// Hunts
 export async function createHunt(data: HuntPayload): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const hunt = await prisma.hunt.create({ data })
+    revalidatePath('/admin/hunts')
     return { success: true, id: hunt.id }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('createHunt error:', error)
     return { success: false, error: 'Failed to create hunt' }
@@ -79,19 +81,21 @@ export async function createHunt(data: HuntPayload): Promise<{ success: boolean;
 
 export async function updateHunt(id: string, data: HuntPayload): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     await prisma.hunt.update({ where: { id }, data })
+    revalidatePath('/admin/hunts')
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('updateHunt error:', error)
     return { success: false, error: 'Failed to update hunt' }
   }
 }
 
-// Clues
+// ─── Clues ────────────────────────────────────────────────────────────────────
+
 export async function createClue(data: {
   huntId: string
   poem: string
@@ -102,7 +106,7 @@ export async function createClue(data: {
   hint?: string
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const maxOrder = await prisma.clue.aggregate({
       where: { huntId: data.huntId },
       _max: { order: true },
@@ -111,8 +115,8 @@ export async function createClue(data: {
     const clue = await prisma.clue.create({ data: { ...data, order } })
     return { success: true, id: clue.id }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('createClue error:', error)
     return { success: false, error: 'Failed to create clue' }
@@ -131,12 +135,12 @@ export async function updateClue(
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     await prisma.clue.update({ where: { id }, data })
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('updateClue error:', error)
     return { success: false, error: 'Failed to update clue' }
@@ -145,64 +149,74 @@ export async function updateClue(
 
 export async function deleteClue(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const clue = await prisma.clue.findUnique({ where: { id } })
     if (!clue) return { success: false, error: 'Clue not found' }
-
     await prisma.clue.delete({ where: { id } })
-
-    // Re-order remaining clues
     const remaining = await prisma.clue.findMany({
       where: { huntId: clue.huntId },
       orderBy: { order: 'asc' },
     })
     for (let i = 0; i < remaining.length; i++) {
-      await prisma.clue.update({
-        where: { id: remaining[i].id },
-        data: { order: i + 1 },
-      })
+      await prisma.clue.update({ where: { id: remaining[i].id }, data: { order: i + 1 } })
     }
-
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('deleteClue error:', error)
     return { success: false, error: 'Failed to delete clue' }
   }
 }
 
-export async function reorderClue(
-  id: string,
-  direction: 'up' | 'down'
-): Promise<{ success: boolean; error?: string }> {
+export async function reorderClue(id: string, direction: 'up' | 'down'): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const clue = await prisma.clue.findUnique({ where: { id } })
     if (!clue) return { success: false, error: 'Clue not found' }
-
     const sibling = await prisma.clue.findFirst({
-      where: {
-        huntId: clue.huntId,
-        order: direction === 'up' ? clue.order - 1 : clue.order + 1,
-      },
+      where: { huntId: clue.huntId, order: direction === 'up' ? clue.order - 1 : clue.order + 1 },
     })
-
     if (!sibling) return { success: false, error: 'Cannot move in that direction' }
-
     await prisma.$transaction([
       prisma.clue.update({ where: { id: clue.id }, data: { order: sibling.order } }),
       prisma.clue.update({ where: { id: sibling.id }, data: { order: clue.order } }),
     ])
-
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('reorderClue error:', error)
     return { success: false, error: 'Failed to reorder clue' }
+  }
+}
+
+// ─── Participants ─────────────────────────────────────────────────────────────
+
+export async function markVoucherUsed(
+  participantId: string,
+  used: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireRole(['ADMIN', 'VOUCHER_STAFF'])
+    await prisma.participant.update({
+      where: { id: participantId },
+      data: {
+        voucherUsed: used,
+        voucherUsedAt: used ? new Date() : null,
+      },
+    })
+    revalidatePath('/admin/participants')
+    revalidatePath('/admin/vouchers')
+    return { success: true }
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
+    }
+    console.error('markVoucherUsed error:', error)
+    return { success: false, error: 'Failed to update voucher status' }
   }
 }
 
@@ -213,7 +227,7 @@ export async function exportParticipantsCSV(filters: {
   search?: string
 }): Promise<{ success: boolean; csv?: string; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN', 'VIEWER'])
 
     const where: Record<string, unknown> = {}
     if (filters.locationId) where.locationId = filters.locationId
@@ -238,52 +252,35 @@ export async function exportParticipantsCSV(filters: {
       orderBy: { createdAt: 'desc' },
     })
 
-    const headers = [
-      'Name',
-      'Email',
-      'Phone',
-      'Shopping Intent',
-      'Location',
-      'Hunt',
-      'Started',
-      'Completed',
-      'Clue Progress',
-      'Voucher Code',
-    ]
-
+    const headers = ['Name', 'Email', 'Phone', 'Location', 'Hunt', 'Started', 'Completed', 'Clue Progress', 'Voucher Code', 'Voucher Used']
     const rows = participants.map((p) => {
       const totalClues = p.hunt.clues.length
       return [
-        p.fullName,
-        p.email,
-        p.phone,
-        p.shoppingIntent || '',
-        p.location.name,
-        p.hunt.title,
-        p.startedAt.toISOString(),
-        p.completedAt?.toISOString() || '',
+        p.fullName, p.email, p.phone,
+        p.location.name, p.hunt.title,
+        p.startedAt.toISOString(), p.completedAt?.toISOString() || '',
         `${p.currentClueIndex}/${totalClues}`,
         p.voucherCode || '',
+        p.voucherUsed ? 'Yes' : 'No',
       ]
     })
 
     const csvContent = [headers, ...rows]
-      .map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-      )
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n')
 
     return { success: true, csv: csvContent }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('exportParticipantsCSV error:', error)
     return { success: false, error: 'Failed to export CSV' }
   }
 }
 
-// Registration Questions
+// ─── Registration Questions ───────────────────────────────────────────────────
+
 export async function createRegistrationQuestion(data: {
   huntId: string
   label: string
@@ -292,7 +289,7 @@ export async function createRegistrationQuestion(data: {
   required: boolean
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const maxOrder = await prisma.registrationQuestion.aggregate({
       where: { huntId: data.huntId },
       _max: { order: true },
@@ -301,8 +298,8 @@ export async function createRegistrationQuestion(data: {
     const q = await prisma.registrationQuestion.create({ data: { ...data, order } })
     return { success: true, id: q.id }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('createRegistrationQuestion error:', error)
     return { success: false, error: 'Failed to create question' }
@@ -314,12 +311,12 @@ export async function updateRegistrationQuestion(
   data: { label: string; type: string; options?: string | null; required: boolean }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     await prisma.registrationQuestion.update({ where: { id }, data })
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('updateRegistrationQuestion error:', error)
     return { success: false, error: 'Failed to update question' }
@@ -328,11 +325,10 @@ export async function updateRegistrationQuestion(
 
 export async function deleteRegistrationQuestion(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const q = await prisma.registrationQuestion.findUnique({ where: { id } })
     if (!q) return { success: false, error: 'Question not found' }
     await prisma.registrationQuestion.delete({ where: { id } })
-    // Re-order remaining
     const remaining = await prisma.registrationQuestion.findMany({
       where: { huntId: q.huntId },
       orderBy: { order: 'asc' },
@@ -342,8 +338,8 @@ export async function deleteRegistrationQuestion(id: string): Promise<{ success:
     }
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('deleteRegistrationQuestion error:', error)
     return { success: false, error: 'Failed to delete question' }
@@ -355,7 +351,7 @@ export async function reorderRegistrationQuestion(
   direction: 'up' | 'down'
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await requireAuth()
+    await requireRole(['ADMIN'])
     const q = await prisma.registrationQuestion.findUnique({ where: { id } })
     if (!q) return { success: false, error: 'Question not found' }
     const sibling = await prisma.registrationQuestion.findFirst({
@@ -368,10 +364,69 @@ export async function reorderRegistrationQuestion(
     ])
     return { success: true }
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return { success: false, error: 'Unauthorized' }
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
     }
     console.error('reorderRegistrationQuestion error:', error)
     return { success: false, error: 'Failed to reorder question' }
+  }
+}
+
+// ─── Admin Users ──────────────────────────────────────────────────────────────
+
+export async function createAdminUser(data: {
+  username: string
+  email?: string
+  password: string
+  role: string
+}): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    await requireRole(['ADMIN'])
+    const valid = ['ADMIN', 'VIEWER', 'VOUCHER_STAFF']
+    if (!valid.includes(data.role)) return { success: false, error: 'Invalid role' }
+    const passwordHash = await bcrypt.hash(data.password, 10)
+    const user = await prisma.adminUser.create({
+      data: { username: data.username, email: data.email, passwordHash, role: data.role },
+    })
+    revalidatePath('/admin/users')
+    return { success: true, id: user.id }
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
+    }
+    const msg = (error as { code?: string })?.code === 'P2002' ? 'Username already taken' : 'Failed to create user'
+    console.error('createAdminUser error:', error)
+    return { success: false, error: msg }
+  }
+}
+
+export async function updateAdminUser(
+  id: string,
+  data: { email?: string; role?: string; isActive?: boolean; password?: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await requireRole(['ADMIN'])
+    const valid = ['ADMIN', 'VIEWER', 'VOUCHER_STAFF']
+    if (data.role && !valid.includes(data.role)) return { success: false, error: 'Invalid role' }
+
+    if (data.isActive === false && session.userId === id) {
+      return { success: false, error: 'Cannot deactivate your own account' }
+    }
+
+    const updateData: Record<string, unknown> = {}
+    if (data.email !== undefined) updateData.email = data.email
+    if (data.role) updateData.role = data.role
+    if (data.isActive !== undefined) updateData.isActive = data.isActive
+    if (data.password) updateData.passwordHash = await bcrypt.hash(data.password, 10)
+
+    await prisma.adminUser.update({ where: { id }, data: updateData })
+    revalidatePath('/admin/users')
+    return { success: true }
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
+    }
+    console.error('updateAdminUser error:', error)
+    return { success: false, error: 'Failed to update user' }
   }
 }

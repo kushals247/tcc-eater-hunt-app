@@ -2,17 +2,44 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, MapPin, Compass, Users, LogOut } from 'lucide-react'
+import { LayoutDashboard, MapPin, Compass, Users, LogOut, Ticket, UserCog } from 'lucide-react'
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: React.ElementType; exact: boolean }
+
+const allNavItems: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/locations', label: 'Locations', icon: MapPin, exact: false },
   { href: '/admin/hunts', label: 'Hunts', icon: Compass, exact: false },
   { href: '/admin/participants', label: 'Participants', icon: Users, exact: false },
+  { href: '/admin/vouchers', label: 'Vouchers', icon: Ticket, exact: false },
+  { href: '/admin/users', label: 'Users', icon: UserCog, exact: false },
 ]
 
-export function SidebarNav() {
+function navItemsForRole(role: string): NavItem[] {
+  if (role === 'VOUCHER_STAFF') {
+    return allNavItems.filter((i) => i.href === '/admin/vouchers')
+  }
+  if (role === 'VIEWER') {
+    return allNavItems.filter((i) => i.href !== '/admin/users')
+  }
+  return allNavItems // ADMIN sees all
+}
+
+const roleBadgeStyle: Record<string, string> = {
+  ADMIN: 'bg-violet-500/20 text-violet-300',
+  VIEWER: 'bg-blue-500/20 text-blue-300',
+  VOUCHER_STAFF: 'bg-amber-500/20 text-amber-300',
+}
+
+const roleLabel: Record<string, string> = {
+  ADMIN: 'Admin',
+  VIEWER: 'Viewer',
+  VOUCHER_STAFF: 'Voucher Staff',
+}
+
+export function SidebarNav({ role }: { role: string }) {
   const pathname = usePathname()
+  const navItems = navItemsForRole(role)
 
   function isActive(href: string, exact: boolean) {
     if (exact) return pathname === href
@@ -28,6 +55,13 @@ export function SidebarNav() {
           <div className="text-white font-bold text-sm leading-tight">Hunt Admin</div>
           <div className="text-slate-400 text-xs">QR Treasure Hunt</div>
         </div>
+      </div>
+
+      {/* Role badge */}
+      <div className="px-6 py-3 border-b border-slate-700/40">
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${roleBadgeStyle[role] ?? 'bg-slate-700 text-slate-300'}`}>
+          {roleLabel[role] ?? role}
+        </span>
       </div>
 
       {/* Nav links */}

@@ -7,8 +7,13 @@ const JWT_SECRET = new TextEncoder().encode(
 
 const COOKIE_NAME = 'admin-session'
 
-export async function createSession(): Promise<string> {
-  const token = await new SignJWT({ admin: true })
+export type SessionPayload = {
+  userId: string
+  role: string
+}
+
+export async function createSession(userId: string, role: string): Promise<string> {
+  const token = await new SignJWT({ userId, role })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
@@ -27,16 +32,24 @@ export async function setSessionCookie(token: string): Promise<void> {
   })
 }
 
-export async function getSession(): Promise<boolean> {
+export async function getSession(): Promise<SessionPayload | null> {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get(COOKIE_NAME)?.value
-    if (!token) return false
-    await jwtVerify(token, JWT_SECRET)
-    return true
+    if (!token) return null
+    const { payload } = await jwtVerify(token, JWT_SECRET)
+    if (!payload.userId || !payload.role) return null
+    return { userId: payload.userId as string, role: payload.role as string }
   } catch {
-    return false
+    return null
   }
+}
+
+export async function requireRole(allowed: string[]): Promise<SessionPayload> {
+  const session = await getSession()
+  if (!session) throw new Error('Unauthorized')
+  if (!allowed.includes(session.role)) throw new Error('Forbidden')
+  return session
 }
 
 export async function clearSession(): Promise<void> {

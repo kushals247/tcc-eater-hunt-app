@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { submitAnswer, sendVoucherEmailAction } from '@/actions/participant'
+import { submitAnswer } from '@/actions/participant'
 import type { ThemePreset } from '@/lib/themes'
 import { hexWithOpacity } from '@/lib/themes'
 
@@ -68,9 +68,9 @@ function CompletionScreen({
   theme: ThemePreset
 }) {
   const [copied, setCopied] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
-  const [emailLoading, setEmailLoading] = useState(false)
-  const [emailError, setEmailError] = useState('')
+  const [imgLoading, setImgLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const voucherRef = useRef<HTMLDivElement>(null)
   const firstName = participant.fullName.split(' ')[0]
 
   async function copyCode() {
@@ -79,15 +79,34 @@ function CompletionScreen({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function sendEmail() {
-    setEmailLoading(true)
-    setEmailError('')
-    const result = await sendVoucherEmailAction(participant.id)
-    setEmailLoading(false)
-    if (result.success) {
-      setEmailSent(true)
-    } else {
-      setEmailError('Could not send email. Please copy your code instead.')
+  async function downloadImage() {
+    if (!voucherRef.current) return
+    setImgLoading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(voucherRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' })
+      const a = document.createElement('a')
+      a.download = `voucher-${voucherCode}.png`
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+    } finally {
+      setImgLoading(false)
+    }
+  }
+
+  async function downloadPDF() {
+    if (!voucherRef.current) return
+    setPdfLoading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const { jsPDF } = await import('jspdf')
+      const canvas = await html2canvas(voucherRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' })
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [90, 130] })
+      const img = canvas.toDataURL('image/png')
+      pdf.addImage(img, 'PNG', 0, 0, 90, 130)
+      pdf.save(`voucher-${voucherCode}.pdf`)
+    } finally {
+      setPdfLoading(false)
     }
   }
 
@@ -96,6 +115,48 @@ function CompletionScreen({
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: pageBg }}>
       <ConfettiEffect theme={theme} />
+
+      {/* Hidden voucher card for html2canvas capture */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        <div
+          ref={voucherRef}
+          style={{ width: 360, background: '#ffffff', borderRadius: 16, overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}
+        >
+          {/* Card header */}
+          <div style={{ backgroundColor: theme.primary, padding: '20px 24px', textAlign: 'center' }}>
+            <p style={{ color: '#ffffff', fontSize: 13, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>
+              Discount Voucher
+            </p>
+            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, margin: '4px 0 0' }}>{hunt.title}</p>
+          </div>
+          {/* Discount */}
+          <div style={{ padding: '24px 24px 12px', textAlign: 'center' }}>
+            <p style={{ fontSize: 52, fontWeight: 900, color: theme.accent, margin: 0, lineHeight: 1 }}>
+              {hunt.voucherDiscountPercent}%
+            </p>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: '4px 0 0' }}>off your next purchase</p>
+          </div>
+          {/* Dashed divider */}
+          <div style={{ borderTop: '2px dashed #e5e7eb', margin: '0 16px' }} />
+          {/* Code */}
+          <div style={{ padding: '16px 24px', textAlign: 'center' }}>
+            <p style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 2, margin: '0 0 6px' }}>Your Code</p>
+            <p style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 800, color: theme.primary, letterSpacing: 3, margin: 0 }}>
+              {voucherCode}
+            </p>
+          </div>
+          {/* Dashed divider */}
+          <div style={{ borderTop: '2px dashed #e5e7eb', margin: '0 16px' }} />
+          {/* Footer */}
+          <div style={{ padding: '12px 24px', textAlign: 'center' }}>
+            <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>
+              Valid until {formatExpiryDate(hunt.voucherExpiryDate)} · One-time use · Present at checkout
+            </p>
+            <p style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{participant.fullName}</p>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-md w-full space-y-6 slide-up">
         {/* Celebration header */}
         <div className="text-center">
@@ -128,18 +189,22 @@ function CompletionScreen({
             >
               {copied ? '✓ Copied!' : '📋 Copy Code'}
             </button>
-            {!emailSent ? (
+            <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={sendEmail}
-                disabled={emailLoading}
-                className="w-full h-12 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                onClick={downloadImage}
+                disabled={imgLoading}
+                className="h-12 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors text-sm"
               >
-                {emailLoading ? 'Sending...' : '📧 Email this to me'}
+                {imgLoading ? 'Saving…' : '🖼 Save as Image'}
               </button>
-            ) : (
-              <p className="text-center text-sm font-medium" style={{ color: theme.primary }}>✓ Email sent to your inbox!</p>
-            )}
-            {emailError && <p className="text-center text-sm text-red-600">{emailError}</p>}
+              <button
+                onClick={downloadPDF}
+                disabled={pdfLoading}
+                className="h-12 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors text-sm"
+              >
+                {pdfLoading ? 'Creating…' : '📄 Save as PDF'}
+              </button>
+            </div>
           </div>
         </div>
 
