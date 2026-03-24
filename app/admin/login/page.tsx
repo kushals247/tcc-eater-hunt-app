@@ -1,13 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -22,8 +20,10 @@ export default function LoginPage() {
       const data = await res.json()
       if (data.success) {
         const dest = data.role === 'VOUCHER_STAFF' ? '/admin/vouchers' : '/admin'
-        router.push(dest)
-        router.refresh()
+        // Hard redirect — ensures the fresh cookie is included in the very
+        // first request to the authenticated page (router.push + refresh can
+        // race and invalidate the cache before navigation completes).
+        window.location.href = dest
       } else {
         setError(data.error || 'Invalid credentials. Please try again.')
       }
