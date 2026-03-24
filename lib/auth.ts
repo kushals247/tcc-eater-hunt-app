@@ -7,9 +7,14 @@ const JWT_SECRET = new TextEncoder().encode(
 
 export const SESSION_COOKIE_NAME = 'admin-session'
 
+// Use secure cookies only when actually served over HTTPS.
+// Basing this on NODE_ENV alone breaks HTTP access (e.g. before SSL is set up)
+// because browsers store secure cookies but refuse to send them over HTTP.
+const isHttps = (process.env.NEXT_PUBLIC_BASE_URL || '').startsWith('https://')
+
 export const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: isHttps,
   sameSite: 'lax' as const,
   maxAge: 60 * 60 * 24 * 7, // 7 days
   path: '/',
