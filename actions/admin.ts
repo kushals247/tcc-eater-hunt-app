@@ -62,6 +62,7 @@ type HuntPayload = {
   themePreset?: string | null
   themePrimaryColor?: string | null
   themeAccentColor?: string | null
+  logoUrl?: string | null
 }
 
 export async function createHunt(data: HuntPayload): Promise<{ success: boolean; id?: string; error?: string }> {
@@ -428,5 +429,66 @@ export async function updateAdminUser(
     }
     console.error('updateAdminUser error:', error)
     return { success: false, error: 'Failed to update user' }
+  }
+}
+
+// ─── Delete Actions (ADMIN only) ──────────────────────────────────────────────
+
+export async function deleteLocation(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireRole(['ADMIN'])
+    // Refuse if location has hunts — delete hunts first
+    const huntCount = await prisma.hunt.count({ where: { locationId: id } })
+    if (huntCount > 0) {
+      return { success: false, error: `Cannot delete: this location has ${huntCount} hunt${huntCount > 1 ? 's' : ''} linked to it. Delete those hunts first.` }
+    }
+    await prisma.location.delete({ where: { id } })
+    revalidatePath('/admin/locations')
+    return { success: true }
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
+    }
+    console.error('deleteLocation error:', error)
+    return { success: false, error: 'Failed to delete location' }
+  }
+}
+
+export async function deleteAdminUser(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await requireRole(['ADMIN'])
+    if (session.userId === id) {
+      return { success: false, error: 'Cannot delete your own account' }
+    }
+    await prisma.adminUser.delete({ where: { id } })
+    revalidatePath('/admin/users')
+    return { success: true }
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
+    }
+    console.error('deleteAdminUser error:', error)
+    return { success: false, error: 'Failed to delete user' }
+  }
+}
+
+export async function deleteParticipant(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireRole(['ADMIN'])
+    // Delete child records first (no cascade defined in schema)
+    await prisma.$transaction([
+      prisma.clueAttempt.deleteMany({ where: { participantId: id } }),
+      prisma.registrationAnswer.deleteMany({ where: { participantId: id } }),
+      prisma.participant.delete({ where: { id } }),
+    ])
+    revalidatePath('/admin/vouchers')
+    revalidatePath('/admin/participants')
+    return { success: true }
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+      return { success: false, error: error.message }
+    }
+    console.error('deleteParticipant error:', error)
+    return { success: false, error: 'Failed to delete record' }
   }
 }

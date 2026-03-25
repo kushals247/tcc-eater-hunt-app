@@ -36,6 +36,7 @@ model Hunt {
   themePreset            String?                @default("EASTER")
   themePrimaryColor      String?
   themeAccentColor       String?
+  logoUrl                String?
   createdAt              DateTime               @default(now())
   clues                  Clue[]
   participants           Participant[]

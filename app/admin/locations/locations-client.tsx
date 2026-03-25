@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createLocation, updateLocation } from '@/actions/admin'
+import { createLocation, updateLocation, deleteLocation } from '@/actions/admin'
 import { slugify, formatDateTime } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 
@@ -21,6 +21,7 @@ export default function LocationsClient({ locations: initial }: { locations: Loc
   const [form, setForm] = useState({ name: '', slug: '', address: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -29,6 +30,19 @@ export default function LocationsClient({ locations: initial }: { locations: Loc
     setForm({ name: '', slug: '', address: '' })
     setErrors({})
     setShowForm(true)
+  }
+
+  async function handleDelete(loc: Location) {
+    if (!window.confirm(`Delete location "${loc.name}"?\n\nThis cannot be undone.`)) return
+    setDeletingId(loc.id)
+    const result = await deleteLocation(loc.id)
+    setDeletingId(null)
+    if (!result.success) {
+      toast({ title: 'Cannot delete', description: result.error, variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Location deleted' })
+    router.refresh()
   }
 
   function openEdit(loc: Location) {
@@ -68,6 +82,7 @@ export default function LocationsClient({ locations: initial }: { locations: Loc
     setShowForm(false)
     router.refresh()
   }
+
 
   return (
     <div>
@@ -142,6 +157,7 @@ export default function LocationsClient({ locations: initial }: { locations: Loc
                       <div className="flex gap-2">
                         <button onClick={() => openEdit(loc)} className="text-blue-600 hover:text-blue-700 text-xs font-medium">Edit</button>
                         <a href={`/admin/hunts?locationId=${loc.id}`} className="text-gray-500 hover:text-gray-700 text-xs font-medium">View Hunts</a>
+                        <button onClick={() => handleDelete(loc)} disabled={deletingId === loc.id} className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-50">{deletingId === loc.id ? 'Deleting…' : 'Delete'}</button>
                       </div>
                     </td>
                   </tr>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createAdminUser, updateAdminUser } from '@/actions/admin'
+import { createAdminUser, updateAdminUser, deleteAdminUser } from '@/actions/admin'
 
 type User = {
   id: string
@@ -62,6 +62,16 @@ export function UsersClient({ users: initial, currentUserId }: { users: User[]; 
   }
 
   function close() { setMode(null); setSelected(null); setError('') }
+
+  async function handleDelete(user: User) {
+    if (!window.confirm(`Permanently delete user "${user.username}"?\n\nThis cannot be undone.`)) return
+    const res = await deleteAdminUser(user.id)
+    if (!res.success) {
+      alert(res.error ?? 'Failed to delete user')
+      return
+    }
+    window.location.reload()
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -153,12 +163,20 @@ export function UsersClient({ users: initial, currentUserId }: { users: User[]; 
                     <button onClick={() => openEdit(user)} className="text-xs text-slate-500 hover:text-slate-800 underline">Edit</button>
                     <button onClick={() => openPassword(user)} className="text-xs text-slate-500 hover:text-slate-800 underline">Password</button>
                     {user.id !== currentUserId && (
-                      <button
-                        onClick={() => toggleActive(user)}
-                        className={`text-xs underline ${user.isActive ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}
-                      >
-                        {user.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => toggleActive(user)}
+                          className={`text-xs underline ${user.isActive ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}
+                        >
+                          {user.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user)}
+                          className="text-xs text-red-600 hover:text-red-800 underline font-semibold"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>

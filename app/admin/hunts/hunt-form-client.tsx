@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createHunt, updateHunt } from '@/actions/admin'
 import { useToast } from '@/hooks/use-toast'
@@ -23,6 +23,7 @@ type HuntData = {
   themePreset?: string | null
   themePrimaryColor?: string | null
   themeAccentColor?: string | null
+  logoUrl?: string | null
 }
 
 function toDateInputValue(date: Date | string | null | undefined) {
@@ -35,6 +36,8 @@ export default function HuntFormClient({ locations, hunt }: { locations: Locatio
   const router = useRouter()
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     title: hunt?.title || '',
     description: hunt?.description || '',
@@ -51,7 +54,28 @@ export default function HuntFormClient({ locations, hunt }: { locations: Locatio
     themePreset: hunt?.themePreset ?? 'EASTER',
     themePrimaryColor: hunt?.themePrimaryColor || '',
     themeAccentColor: hunt?.themeAccentColor || '',
+    logoUrl: hunt?.logoUrl || '',
   })
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Upload failed')
+      setForm((f) => ({ ...f, logoUrl: json.url }))
+      toast({ title: 'Logo uploaded ✓' })
+    } catch (err: unknown) {
+      toast({ title: 'Upload failed', description: err instanceof Error ? err.message : 'Please try again', variant: 'destructive' })
+    } finally {
+      setLogoUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   // Resolve effective preview colours
   const selectedPreset = THEME_PRESETS.find((p) => p.id === form.themePreset) ?? THEME_PRESETS[0]
@@ -78,6 +102,7 @@ export default function HuntFormClient({ locations, hunt }: { locations: Locatio
       themePreset: form.themePreset || 'EASTER',
       themePrimaryColor: form.themePrimaryColor || null,
       themeAccentColor: form.themeAccentColor || null,
+      logoUrl: form.logoUrl || null,
     }
 
     const result = hunt?.id ? await updateHunt(hunt.id, payload) : await createHunt(payload)
@@ -174,7 +199,52 @@ export default function HuntFormClient({ locations, hunt }: { locations: Locatio
         </div>
       </div>
 
-      {/* Section 4: Theme */}
+      {/* Section 4: Logo */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-sm">
+        <h2 className="font-semibold text-slate-900 text-base border-b border-slate-100 pb-3">Hunt Logo</h2>
+        <p className="text-xs text-slate-500">Appears on the registration page, clue pages, voucher card, and error screens for this hunt.</p>
+        <div className="flex items-start gap-5">
+          {/* Preview box */}
+          <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 flex-shrink-0">
+            {form.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.logoUrl} alt="Hunt logo preview" className="w-full h-full object-contain p-1" />
+            ) : (
+              <span className="text-3xl select-none">🖼️</span>
+            )}
+          </div>
+          {/* Controls */}
+          <div className="flex-1 space-y-2.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+              className="hidden"
+              onChange={handleLogoUpload}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={logoUploading}
+              className="px-4 py-2 bg-slate-900 text-white text-sm rounded-lg font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            >
+              {logoUploading ? 'Uploading…' : form.logoUrl ? 'Replace Logo' : 'Upload Logo'}
+            </button>
+            {form.logoUrl && (
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, logoUrl: '' }))}
+                className="block text-xs text-red-500 hover:text-red-700 transition-colors"
+              >
+                Remove logo
+              </button>
+            )}
+            <p className="text-xs text-slate-400">PNG, JPG, WebP, SVG or GIF · Max 2 MB · Recommended: square or landscape</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 5: Theme */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-sm">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>

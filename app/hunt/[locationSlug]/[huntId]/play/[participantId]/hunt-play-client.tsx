@@ -27,6 +27,7 @@ type Hunt = {
   completionMessage: string
   voucherDiscountPercent: number
   voucherExpiryDate: string | null
+  logoUrl: string | null
 }
 
 function formatExpiryDate(dateStr: string | null): string {
@@ -124,6 +125,10 @@ function CompletionScreen({
         >
           {/* Card header */}
           <div style={{ backgroundColor: theme.primary, padding: '20px 24px', textAlign: 'center' }}>
+            {hunt.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={hunt.logoUrl} alt="" style={{ height: 36, maxWidth: 120, objectFit: 'contain', margin: '0 auto 10px', display: 'block', filter: 'brightness(0) invert(1)' }} crossOrigin="anonymous" />
+            )}
             <p style={{ color: '#ffffff', fontSize: 13, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>
               Discount Voucher
             </p>
@@ -160,6 +165,10 @@ function CompletionScreen({
       <div className="max-w-md w-full space-y-6 slide-up">
         {/* Celebration header */}
         <div className="text-center">
+          {hunt.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hunt.logoUrl} alt="" className="h-16 w-auto mx-auto mb-4 object-contain drop-shadow-sm" />
+          )}
           <div className="text-6xl mb-4">🎉</div>
           <h1 className="text-2xl font-bold mb-2" style={{ color: theme.primary }}>
             Well done, {firstName}!
@@ -328,6 +337,13 @@ export default function HuntPlayClient({
   return (
     <div className="min-h-screen" style={{ background: pageBg }}>
       <div className="max-w-md mx-auto px-4 py-6">
+        {/* Logo */}
+        {hunt.logoUrl && (
+          <div className="flex justify-center mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={hunt.logoUrl} alt="" className="h-12 w-auto object-contain drop-shadow-sm" />
+          </div>
+        )}
         {/* Progress Bar */}
         <div className="mb-6">
           <div className="flex justify-between text-sm text-gray-500 mb-2">

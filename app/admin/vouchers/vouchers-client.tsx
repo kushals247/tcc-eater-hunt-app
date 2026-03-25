@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { markVoucherUsed } from '@/actions/admin'
+import { markVoucherUsed, deleteParticipant } from '@/actions/admin'
 
 type Voucher = {
   id: string
@@ -23,6 +23,7 @@ export function VouchersClient({ vouchers: initial, canEdit }: { vouchers: Vouch
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unused' | 'used'>('all')
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     let list = vouchers
@@ -53,6 +54,18 @@ export function VouchersClient({ vouchers: initial, canEdit }: { vouchers: Vouch
             : x
         )
       )
+    }
+  }
+
+  async function handleDelete(v: Voucher) {
+    if (!window.confirm(`Delete the record for ${v.fullName}?\n\nThis will permanently remove their registration and voucher.`)) return
+    setDeletingId(v.id)
+    const res = await deleteParticipant(v.id)
+    setDeletingId(null)
+    if (res.success) {
+      setVouchers((prev) => prev.filter((x) => x.id !== v.id))
+    } else {
+      alert(res.error ?? 'Failed to delete')
     }
   }
 
@@ -158,17 +171,26 @@ export function VouchersClient({ vouchers: initial, canEdit }: { vouchers: Vouch
                   </td>
                   {canEdit && (
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => toggle(v)}
-                        disabled={loadingId === v.id}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
-                          v.voucherUsed
-                            ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            : 'bg-green-600 text-white hover:bg-green-700'
-                        }`}
-                      >
-                        {loadingId === v.id ? '…' : v.voucherUsed ? 'Undo' : 'Mark Used'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggle(v)}
+                          disabled={loadingId === v.id}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
+                            v.voucherUsed
+                              ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              : 'bg-green-600 text-white hover:bg-green-700'
+                          }`}
+                        >
+                          {loadingId === v.id ? '…' : v.voucherUsed ? 'Undo' : 'Mark Used'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(v)}
+                          disabled={deletingId === v.id}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium underline disabled:opacity-50"
+                        >
+                          {deletingId === v.id ? '…' : 'Delete'}
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>

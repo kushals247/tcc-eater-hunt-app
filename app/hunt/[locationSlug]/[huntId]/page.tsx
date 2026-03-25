@@ -42,7 +42,12 @@ export default async function HuntRegistrationPage({
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: pageBg }}>
         <div className="bg-white rounded-2xl p-8 text-center max-w-sm w-full shadow-lg">
-          <div className="text-5xl mb-4">⏰</div>
+          {hunt?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hunt.logoUrl} alt="" className="h-16 w-auto mx-auto mb-4 object-contain" />
+          ) : (
+            <div className="text-5xl mb-4">⏰</div>
+          )}
           <h1 className="text-xl font-bold text-gray-800 mb-2">Hunt Not Available</h1>
           <p className="text-gray-500 mb-4">
             {isExpired ? 'This treasure hunt has ended.' :
@@ -69,7 +74,12 @@ export default async function HuntRegistrationPage({
       <div className="max-w-md mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="text-5xl mb-4">🎯</div>
+          {hunt.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hunt.logoUrl} alt={hunt.title} className="h-20 w-auto mx-auto mb-4 object-contain drop-shadow-sm" />
+          ) : (
+            <div className="text-5xl mb-4">🎯</div>
+          )}
           <h1 className="text-2xl font-bold mb-2" style={{ color: theme?.primary }}>
             {hunt.title}
           </h1>

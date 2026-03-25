@@ -57,6 +57,7 @@ export default async function PlayPage({
         completionMessage: participant.hunt.completionMessage,
         voucherDiscountPercent: participant.hunt.voucherDiscountPercent,
         voucherExpiryDate: participant.hunt.voucherExpiryDate?.toISOString() || null,
+        logoUrl: participant.hunt.logoUrl ?? null,
       }}
       clues={clues}
       theme={theme}
