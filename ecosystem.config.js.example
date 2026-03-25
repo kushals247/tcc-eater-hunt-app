@@ -1,0 +1,28 @@
+/**
+ * PM2 Ecosystem Config — EXAMPLE
+ *
+ * Copy this to ~/app/ecosystem.config.js on the server and fill in real values.
+ * DO NOT commit ecosystem.config.js to git (it contains secrets).
+ *
+ * Usage:
+ *   pm2 start ecosystem.config.js
+ *   pm2 restart treasure-hunt
+ *   pm2 save
+ */
+module.exports = {
+  apps: [
+    {
+      name: 'treasure-hunt',
+      script: './server.js',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+        // file:/// (three slashes) is required for the @prisma/adapter-libsql driver
+        DATABASE_URL: 'file:///home/ec2-user/app/prisma/prod.db',
+        NEXT_PUBLIC_BASE_URL: 'https://easterhunt.tc.co.ke',
+        JWT_SECRET: 'REPLACE_WITH_A_LONG_RANDOM_SECRET',
+        ADMIN_PASSWORD: 'not-used',
+      },
+    },
+  ],
+}

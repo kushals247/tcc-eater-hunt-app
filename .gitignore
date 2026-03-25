@@ -50,3 +50,6 @@ Archive.zip
 
 # Uploaded files
 public/uploads/
+
+# PM2 ecosystem config (contains secrets)
+ecosystem.config.js
